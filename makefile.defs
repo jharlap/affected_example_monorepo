@@ -9,6 +9,7 @@ go_version ?= 1.7.4
 build_image ?= true
 is_library ?= false
 
+# TODO: Replace this with a real one!
 docker_registry = host.for.docker.registry.example.com/path/prefix
 
 project_dir := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))

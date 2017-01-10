@@ -47,7 +47,8 @@ script:
   - ci/make_shard.sh ${SHARD} ${NUM_SHARDS} "${AFFECTED_COMMIT_RANGE}" test
   # in script rather than after_success so that failures building/pushing images will show as red
   - if [[ "$TRAVIS_PULL_REQUEST" == "false" && "$TRAVIS_BRANCH" == "master" ]] ; then
-      ci/make_shard.sh ${SHARD} ${NUM_SHARDS} "${AFFECTED_COMMIT_RANGE}" push_image ;
+      echo skipping the next line because the docker repo is fake, but remove the echo in the next line for wins
+      echo ci/make_shard.sh ${SHARD} ${NUM_SHARDS} "${AFFECTED_COMMIT_RANGE}" push_image ;
     fi
 
 branches:
