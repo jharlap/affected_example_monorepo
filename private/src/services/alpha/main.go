@@ -13,18 +13,18 @@ func main() {
 		ws := strings.Split(r.URL.Path, "/")
 		if len(ws) < 3 {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"missing expected x value in /square/:x"}`)
+			fmt.Fprint(w, `{"error":"missing expected x value in /square/:x"}`) // #nosec
 		}
 
 		x, err := strconv.Atoi(ws[1])
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `{"error":"x must be numeric"}`)
+			fmt.Fprint(w, `{"error":"x must be numeric"}`) // #nosec
 		}
 		x2 := square(x)
-		fmt.Fprintf(w, `{"x":%d,"squared":%d}`, x, x2)
+		fmt.Fprintf(w, `{"x":%d,"squared":%d}`, x, x2) // #nosec
 	}))
-	http.ListenAndServe(":80", nil)
+	fmt.Println(http.ListenAndServe(":80", nil))
 }
 
 func square(x int) int {
