@@ -1,0 +1,104 @@
+# expect makefiles that include this to define the following variables
+# go_version - must be a fully specified go version that matches a docker image (1.7.3, not 1.7)
+# extra_build_deps - list of extra targets as dependencies for the build stage (eg, generate)
+# target_binary - filename to use as the output binary, if not specified will default to the directory name
+
+default: test
+
+go_version ?= 1.7.4
+build_image ?= true
+is_library ?= false
+
+docker_registry = host.for.docker.registry.example.com/path/prefix
+
+project_dir := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
+builder_image := golang:${go_version}-alpine
+project_name ?= $(shell basename $(project_dir))
+git_hash := $(shell git describe --long --tags --dirty --always)
+output_image := "$(project_name):$(shell git rev-parse HEAD)"
+
+target_binary ?= ${project_name}
+
+go_ldflags := -ldflags "-X main.Version=${git_hash}"
+
+repo_root := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+work_dir := $(shell perl -e 'use File::Spec; print File::Spec->abs2rel(@ARGV) . "\n"' ${project_dir} ${repo_root})
+
+
+# if the project does not want images built, hack to avoid build target as a dependency
+ifneq ($(is_library),false)
+	build_binary = false
+else ifeq ($(MAKECMDGOALS),build)
+	build_binary = true
+else ifeq ($(build_image),true)
+	build_binary = true
+endif
+
+# disable building images if there is no Dockerfile
+ifeq ($(wildcard Dockerfile),)
+	build_image = false
+endif
+
+########## TARGETS ########## 
+
+## BUILD
+build: clean ${extra_build_deps}
+ifeq ($(build_binary),true)
+	docker run --rm -v ${repo_root}:/monorepo \
+		-w /monorepo/${work_dir} \
+		-e GOPATH=/monorepo/vendor:/monorepo/private \
+		${builder_image} go build ${go_ldflags} -o ${target_binary} .
+else
+	@echo "binary building disabled for ${project_name}"
+endif
+
+## CLEAN
+clean:
+	rm -f ${target_binary}
+
+## IMAGE
+image: build
+ifeq ($(build_image),true)
+	docker build -t ${output_image} .
+else
+	@echo "image building disabled for ${project_name}"
+endif
+
+## PUSH_IMAGE
+push_image: image
+ifeq ($(build_image),true)
+	docker tag ${output_image} ${docker_registry}/${output_image}
+	docker push ${docker_registry}/${output_image}
+else
+	@echo "image building disabled for ${project_name}"
+endif
+
+## TEST
+ifneq ($(is_library),false)
+	unused_flag="-exported"
+endif
+test: ${extra_build_deps}
+	docker run --rm -v ${repo_root}:/monorepo \
+		-w /monorepo/${work_dir} \
+		-e GOPATH=/monorepo/vendor:/monorepo/private \
+		-e GOBIN=/go/bin \
+		-e CGO_ENABLED=0 \
+		-e AWS_SECRET_ACCESS_KEY=secret \
+		-e AWS_ACCESS_KEY_ID=key \
+		${builder_image} /bin/sh -c "go version ; \
+			go install honnef.co/go/staticcheck/cmd/staticcheck ; \
+			go install honnef.co/go/unused/cmd/unused ; \
+			go install github.com/HewlettPackard/gas ; \
+			go vet ./... && \
+			staticcheck ./... && \
+			unused ${unused_flag} ./... && \
+			/monorepo/ci/run_gas.sh && \
+			go test ./..."
+
+## VARS
+vars:
+	@echo "project_dir: ${project_dir}"
+	@echo "work_dir: ${work_dir}"
+	@echo "output_image: ${output_image}"
+	@echo "target_binary: ${target_binary}"
+	@echo "git_hash: ${git_hash}"

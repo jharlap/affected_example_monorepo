@@ -1,0 +1,55 @@
+language: go
+
+go:
+  - 1.7.4
+
+# sudo and docker are necessary for building and pushing deployable docker images
+sudo: required
+dist: trusty
+services:
+  - docker
+
+cache:
+  directories:
+    - $HOME/docker
+
+before_install:
+  - apt-cache madison docker-engine
+  - sudo apt-get install -qq docker-engine=1.12.3-0~trusty
+  - sudo service docker stop &
+  - sudo killall -9 dockerd; sudo killall -9 docker-containerd; true
+  - sudo mount -t tmpfs -o size=4g tmpfs /var/lib/docker
+  - wait # for docker to finish stopping
+  - sudo service docker start
+  - ci/wait_for_docker.sh
+  - export PATH=${PATH}:${TRAVIS_BUILD_DIR}/vendor/bin
+  - export GOPATH="${TRAVIS_BUILD_DIR}/vendor:${TRAVIS_BUILD_DIR}/private"
+  - mkdir -p ~/docker
+  - export NUM_SHARDS=3
+
+install:
+  - go install github.com/jharlap/affected
+
+env:
+  - SHARD=0
+  - SHARD=1
+  - SHARD=2
+
+script:
+  - docker version
+  - echo "TRAVIS_PULL_REQUEST $TRAVIS_PULL_REQUEST TRAVIS_PULL_REQUEST_BRANCH $TRAVIS_PULL_REQUEST_BRANCH TRAVIS_COMMIT_RANGE $TRAVIS_COMMIT_RANGE"
+  - if [[ "$TRAVIS_PULL_REQUEST" != "false" && "$TRAVIS_PULL_REQUEST_SHA" != "" ]] ; then
+      base_version=$(git merge-base master ${TRAVIS_PULL_REQUEST_SHA}) ;
+      export AFFECTED_COMMIT_RANGE="${base_version}..${TRAVIS_PULL_REQUEST_SHA}" ;
+    elif [[ "$TRAVIS_COMMIT_RANGE" != "" ]] ; then
+      export AFFECTED_COMMIT_RANGE="master" ;
+    fi
+  - ci/make_shard.sh ${SHARD} ${NUM_SHARDS} "${AFFECTED_COMMIT_RANGE}" test
+  # in script rather than after_success so that failures building/pushing images will show as red
+  - if [[ "$TRAVIS_PULL_REQUEST" == "false" && "$TRAVIS_BRANCH" == "master" ]] ; then
+      ci/make_shard.sh ${SHARD} ${NUM_SHARDS} "${AFFECTED_COMMIT_RANGE}" push_image ;
+    fi
+
+branches:
+  only:
+    - master
