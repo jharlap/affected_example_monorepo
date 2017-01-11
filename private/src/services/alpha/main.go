@@ -9,7 +9,7 @@ import (
 
 func main() {
 	// square the path param x in /square/:x
-	http.HandleFunc("/square", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/square/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ws := strings.Split(r.URL.Path, "/")
 		if len(ws) < 3 {
 			w.WriteHeader(http.StatusBadRequest)
